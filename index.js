@@ -26,7 +26,7 @@ const parseDuration = (text) => {
 
 async function main() {
   const browser = await dappeteer.launch(puppeteer, {
-    metamaskVersion: "v10.1.1",
+    metamaskVersion: process.env.METAMASK_VERSION || "v10.5.2",
     headless: true,
   });
   console.log("done brwoser");
@@ -35,7 +35,7 @@ async function main() {
     seed: process.env.SEED,
   });
   console.log("done metamas");
-  await metamask.switchNetwork("Fantom Opera");
+  await metamask.switchNetwork(process.env.NETWORK || "Fantom Opera");
   console.log("switch cnetw");
   const page = await browser.newPage();
 

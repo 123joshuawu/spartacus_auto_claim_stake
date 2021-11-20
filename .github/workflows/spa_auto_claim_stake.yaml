@@ -1,0 +1,35 @@
+name: SPA Auto Claim and Stake
+
+on:
+  # schedule:
+  #   - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  spa_auto_claim_and_stake:
+    name: SPA Auto Claim and Stake
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run workflow
+        run: node index.js
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+          SEED: ${{ secrets.SEED }}
+
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: recording
+          path: recording.mp4

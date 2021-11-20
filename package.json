@@ -1,0 +1,24 @@
+{
+  "name": "spartacus_auto_claim_stake",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/123joshuawu/spartacus_auto_claim_stake.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/123joshuawu/spartacus_auto_claim_stake/issues"
+  },
+  "homepage": "https://github.com/123joshuawu/spartacus_auto_claim_stake#readme",
+  "dependencies": {
+    "@chainsafe/dappeteer": "^2.2.0",
+    "puppeteer": "^11.0.0",
+    "puppeteer-screen-recorder": "^2.0.2"
+  }
+}

@@ -26,7 +26,7 @@ const parseDuration = (text) => {
 
 async function main() {
   const browser = await dappeteer.launch(puppeteer, {
-    metamaskVersion: process.env.METAMASK_VERSION || "v10.5.2",
+    metamaskVersion: process.env.METAMASK_VERSION || "latest",
     headless: true,
   });
   console.log("done brwoser");

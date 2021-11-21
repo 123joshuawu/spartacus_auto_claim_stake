@@ -53,7 +53,7 @@ async function main() {
         }
       });
     }),
-    30000
+    60000
   );
 
   console.log("Reloading metamask extension page");
@@ -62,17 +62,18 @@ async function main() {
   await new Promise((res) => setTimeout(res, 5000));
 
   console.log("Loading metamask");
-  const metamask = await timeout(
-    dappeteer.setupMetamask(browser, {
-      password: process.env.PASSWORD,
-      seed: process.env.SEED,
-    }),
-    30000
-  );
+  const metamask = dappeteer.setupMetamask(browser, {
+    password: process.env.PASSWORD,
+    seed: process.env.SEED,
+  });
   console.log("Metamask loaded");
 
+  console.log("Get first page");
   const page = (await browser.pages())[0];
 
+  await page.bringToFront();
+
+  console.log("Start recording");
   const recorder = new PuppeteerScreenRecorder(page);
 
   await recorder.start("./recording.mp4");

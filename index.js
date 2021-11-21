@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const puppeteer = require("puppeteer");
 const dappeteer = require("@chainsafe/dappeteer");
 const { PuppeteerScreenRecorder } = require("puppeteer-screen-recorder");
@@ -24,66 +26,124 @@ const parseDuration = (text) => {
   return totalSeconds;
 };
 
+const timeout = (prom, time) =>
+  Promise.race([prom, new Promise((_r, rej) => setTimeout(rej, time))]);
+
 async function main() {
+  console.log("Loading browser");
   const browser = await dappeteer.launch(puppeteer, {
-    metamaskVersion: process.env.METAMASK_VERSION || "latest",
-    headless: true,
+    metamaskVersion: process.env.METAMASK_VERSION || "v10.1.1",
+    headless: false,
+    args: ["--enable-automation", "--no-sandbox"],
+    executablePath: process.env.PUPPETEER_EXEC_PATH,
   });
-  console.log("done brwoser");
-  const metamask = await dappeteer.setupMetamask(browser, {
-    password: process.env.PASSWORD,
-    seed: process.env.SEED,
-  });
-  console.log("done metamas");
-  await metamask.switchNetwork(process.env.NETWORK || "Fantom Opera");
-  console.log("switch cnetw");
-  const page = await browser.newPage();
+  console.log("Browser loaded");
+
+  console.log("Waiting for metamask extension page");
+  const metamaskPage = await timeout(
+    new Promise((resolve, reject) => {
+      browser.on("targetcreated", async (target) => {
+        if (target.url().match("chrome-extension://[a-z]+/home.html")) {
+          try {
+            const page = await target.page();
+            resolve(page);
+          } catch (e) {
+            reject(e);
+          }
+        }
+      });
+    }),
+    30000
+  );
+
+  console.log("Reloading metamask extension page");
+  await new Promise((res) => setTimeout(res, 5000));
+  await metamaskPage.reload();
+  await new Promise((res) => setTimeout(res, 5000));
+
+  console.log("Loading metamask");
+  const metamask = await timeout(
+    dappeteer.setupMetamask(browser, {
+      password: process.env.PASSWORD,
+      seed: process.env.SEED,
+    }),
+    30000
+  );
+  console.log("Metamask loaded");
+
+  const page = (await browser.pages())[0];
 
   const recorder = new PuppeteerScreenRecorder(page);
 
   await recorder.start("./recording.mp4");
 
   try {
-    await page.goto("https://app.spartacus.finance/#/stake", {
-      waitUntil: "domcontentloaded",
-    });
+    console.log("Loading Spartacus stake page");
+    await page.goto("https://app.spartacus.finance/#/stake");
 
     await page.waitForSelector(".rebase-timer strong", {
       visible: true,
       timeout: 30000,
     });
 
-    const rebaseText = await page.evaluate(() => {
+    const rebaseTimerText = await page.evaluate(() => {
       const element = document.getElementsByClassName("rebase-timer").item(0);
 
       return element.getElementsByTagName("strong").item(0).innerText;
     });
 
-    console.log(rebaseText);
+    console.log("Timer text: ", rebaseTimerText);
 
-    const totalSeconds = parseDuration(rebaseText);
+    const totalSeconds = parseDuration(rebaseTimerText);
 
-    console.log(totalSeconds);
+    // if (totalSeconds > 60 * 15) {
+    //   console.log("SKIPPING");
+    //   return;
+    // }
 
-    if (totalSeconds < 60 * 15) {
-      console.log(" do the thang");
+    console.log("Adding Fantom network");
+    await metamask.addNetwork({
+      networkName: "Fantom Opera",
+      rpc: "https://rpc.ftm.tools/",
+      chainId: 250,
+    });
 
-      await page.goTo("https://app.spartacus.finance/#/bonds", {
-        waitUntil: "domcontentloaded",
-      });
+    console.log("Connecting wallet");
+    await page.bringToFront();
 
-      await page.waitForSelector("#claim-all-and-stake-btn", {
-        visible: true,
-        timeout: 30000,
-      });
+    await page.click("#wallet-menu");
 
-      await page.click("#claim-all-and-stake-btn");
+    await page.waitForSelector(".web3modal-provider-description");
 
-      await metamask.confirmTransaction();
-    }
+    await page.click(".web3modal-provider-container");
+
+    console.log("Approving metamask wallet connection");
+    await metamask.approve();
+
+    await page.bringToFront();
+
+    console.log("Loading bonds page");
+    await page.goto("https://app.spartacus.finance/#/bonds", {
+      waitUntil: "domcontentloaded",
+    });
+
+    console.log("Waiting for claim all and stake button");
+    await page.waitForSelector("#claim-all-and-stake-btn", {
+      visible: true,
+      timeout: 30000,
+    });
+
+    console.log("Claim and staking all bonds");
+    await page.click("#claim-all-and-stake-btn");
+
+    console.log("Confirming metamask transaction");
+    await metamask.confirmTransaction();
+
+    console.log("PROCESSED CLAIM AND STAKE");
   } catch (err) {
     console.error(err);
   } finally {
+    console.log("Cleaning up");
     await recorder.stop();
     await browser.close();
   }

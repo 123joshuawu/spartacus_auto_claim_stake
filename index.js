@@ -72,10 +72,18 @@ async function main() {
     60000
   );
 
-  console.log("Reloading metamask extension page");
-  await new Promise((res) => setTimeout(res, 5000));
-  await metamaskPage.reload({ waitUntil: "domcontentloaded" });
-  await new Promise((res) => setTimeout(res, 5000));
+  browser.on("targetcreated", async (target) => {
+    if (!target.url().match("chrome-extension://[a-z]+/home.html")) {
+      return;
+    }
+
+    if (target.url().includes("welcome")) {
+      return;
+    }
+
+    const page = await target.page();
+    await page.reload({ waitUntil: "domcontentloaded" });
+  });
 
   console.log("Loading metamask");
   const metamask = await dappeteer.setupMetamask(browser, {

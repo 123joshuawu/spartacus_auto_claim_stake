@@ -18,9 +18,10 @@ jobs:
         env:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
         with:
-          args: install
           node-version: "14"
           cache: "npm"
+
+      - run: npm install
 
       - uses: mujo-code/puppeteer-headful@v2
         env:

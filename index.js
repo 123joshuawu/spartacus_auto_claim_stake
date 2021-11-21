@@ -29,6 +29,22 @@ const parseDuration = (text) => {
 const timeout = (prom, time) =>
   Promise.race([prom, new Promise((_r, rej) => setTimeout(rej, time))]);
 
+const retry = async (prom, retries) => {
+  let counter = 0;
+
+  while (counter < retries) {
+    try {
+      await prom;
+
+      return;
+    } catch (err) {
+      counter += 1;
+    }
+  }
+
+  throw new Error("Max retries reached");
+};
+
 async function main() {
   console.log("Loading browser");
   const browser = await dappeteer.launch(puppeteer, {
@@ -58,7 +74,7 @@ async function main() {
 
   console.log("Reloading metamask extension page");
   await new Promise((res) => setTimeout(res, 5000));
-  await metamaskPage.reload();
+  await metamaskPage.reload({ waitUntil: "domcontentloaded" });
   await new Promise((res) => setTimeout(res, 5000));
 
   console.log("Loading metamask");
@@ -80,13 +96,25 @@ async function main() {
 
   try {
     console.log("Loading Spartacus stake page");
-    await page.goto("https://app.spartacus.finance/#/stake");
-
-    await page.waitForSelector(".rebase-timer strong", {
-      visible: true,
-      timeout: 30000,
+    await page.goto("https://app.spartacus.finance/#/stake", {
+      waitUntil: ["domcontentloaded", "networkidle0"],
     });
 
+    let tryCounter = 0;
+    while (tryCounter < 3) {
+      try {
+        await page.waitForSelector(".rebase-timer strong", {
+          visible: true,
+          timeout: 30000,
+        });
+
+        break;
+      } catch (err) {
+        tryCounter += 1;
+
+        await page.reload({ waitUntil: ["domcontentloaded", "networkidle0"] });
+      }
+    }
     const rebaseTimerText = await page.evaluate(() => {
       const element = document.getElementsByClassName("rebase-timer").item(0);
 
@@ -125,7 +153,7 @@ async function main() {
 
     console.log("Loading bonds page");
     await page.goto("https://app.spartacus.finance/#/bonds", {
-      waitUntil: "domcontentloaded",
+      waitUntil: ["domcontentloaded", "networkidle0"],
     });
 
     console.log("Waiting for claim all and stake button");

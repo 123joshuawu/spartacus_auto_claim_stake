@@ -55,41 +55,30 @@ async function main() {
   });
   console.log("Browser loaded");
 
-  console.log("Waiting for metamask extension page");
-  const metamaskPage = await timeout(
-    new Promise((resolve, reject) => {
-      browser.on("targetcreated", async (target) => {
-        if (target.url().match("chrome-extension://[a-z]+/home.html")) {
-          try {
-            const page = await target.page();
-            resolve(page);
-          } catch (e) {
-            reject(e);
-          }
-        }
-      });
-    }),
-    60000
-  );
-
   browser.on("targetcreated", async (target) => {
+    console.log("New browser target created");
     if (!target.url().match("chrome-extension://[a-z]+/home.html")) {
       return;
     }
 
     if (target.url().includes("welcome")) {
+      console.log("Metmask extension already initialized");
       return;
     }
 
+    console.log("Reloading metamask extension page");
     const page = await target.page();
     await page.reload({ waitUntil: "domcontentloaded" });
   });
 
   console.log("Loading metamask");
-  const metamask = await dappeteer.setupMetamask(browser, {
-    password: process.env.PASSWORD,
-    seed: process.env.SEED,
-  });
+  const metamask = timeout(
+    dappeteer.setupMetamask(browser, {
+      password: process.env.PASSWORD,
+      seed: process.env.SEED,
+    }),
+    30000
+  );
   console.log("Metamask loaded");
 
   console.log("Get first page");

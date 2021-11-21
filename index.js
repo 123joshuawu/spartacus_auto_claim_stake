@@ -45,6 +45,8 @@ const retry = async (prom, retries) => {
   throw new Error("Max retries reached");
 };
 
+let isMetamaskLoaded;
+
 async function main() {
   console.log("Loading browser");
   const browser = await dappeteer.launch(puppeteer, {
@@ -55,7 +57,12 @@ async function main() {
   });
   console.log("Browser loaded");
 
+  isMetamaskLoaded = false;
   browser.on("targetcreated", async (target) => {
+    if (isMetamaskLoaded) {
+      return;
+    }
+
     console.log("New browser target created");
     if (!target.url().match("chrome-extension://[a-z]+/home.html")) {
       return;
@@ -72,13 +79,14 @@ async function main() {
   });
 
   console.log("Loading metamask");
-  const metamask = timeout(
+  const metamask = await timeout(
     dappeteer.setupMetamask(browser, {
       password: process.env.PASSWORD,
       seed: process.env.SEED,
     }),
     30000
   );
+  metamaskLoaded = true;
   console.log("Metamask loaded");
 
   console.log("Get first page");

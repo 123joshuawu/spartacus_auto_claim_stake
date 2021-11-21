@@ -78,7 +78,7 @@ async function main() {
   await new Promise((res) => setTimeout(res, 5000));
 
   console.log("Loading metamask");
-  const metamask = dappeteer.setupMetamask(browser, {
+  const metamask = await dappeteer.setupMetamask(browser, {
     password: process.env.PASSWORD,
     seed: process.env.SEED,
   });

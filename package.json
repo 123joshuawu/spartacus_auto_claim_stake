@@ -19,6 +19,7 @@
   "dependencies": {
     "@chainsafe/dappeteer": "^2.2.0",
     "dotenv": "^10.0.0",
+    "puppeteer": "^11.0.0",
     "puppeteer-screen-recorder": "^2.0.2"
   }
 }

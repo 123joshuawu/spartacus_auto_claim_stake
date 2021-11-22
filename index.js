@@ -5,6 +5,8 @@ const puppeteer = require("puppeteer");
 const dappeteer = require("@chainsafe/dappeteer");
 const { PuppeteerScreenRecorder } = require("puppeteer-screen-recorder");
 
+const CLAIM_TIME_THRESHOLD_S = process.env.CLAIM_TIME_THRESHOLD_S || 20 * 60;
+
 const parseDuration = (text) => {
   if (text === "") {
     return 0;
@@ -121,7 +123,7 @@ async function main() {
 
     const totalSeconds = parseDuration(rebaseTimerText);
 
-    if (totalSeconds > 60 * 15) {
+    if (totalSeconds > CLAIM_TIME_THRESHOLD_S) {
       console.log("SKIPPING");
       return { status: "skipped" };
     }

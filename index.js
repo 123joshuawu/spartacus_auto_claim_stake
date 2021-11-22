@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const fs = require("fs/promises");
 const puppeteer = require("puppeteer");
 const dappeteer = require("@chainsafe/dappeteer");
 const { PuppeteerScreenRecorder } = require("puppeteer-screen-recorder");
@@ -29,77 +30,64 @@ const parseDuration = (text) => {
 const timeout = (prom, time) =>
   Promise.race([prom, new Promise((_r, rej) => setTimeout(rej, time))]);
 
-const retry = async (prom, retries) => {
-  let counter = 0;
-
-  while (counter < retries) {
-    try {
-      await prom;
-
-      return;
-    } catch (err) {
-      counter += 1;
-    }
-  }
-
-  throw new Error("Max retries reached");
-};
-
 let isMetamaskLoaded;
 
 async function main() {
-  console.log("Loading browser");
-  const browser = await dappeteer.launch(puppeteer, {
-    metamaskVersion: process.env.METAMASK_VERSION || "v10.1.1",
-    headless: false,
-    args: ["--enable-automation", "--no-sandbox"],
-    executablePath: process.env.PUPPETEER_EXEC_PATH,
-  });
-  console.log("Browser loaded");
-
-  isMetamaskLoaded = false;
-  browser.on("targetcreated", async (target) => {
-    if (isMetamaskLoaded) {
-      return;
-    }
-
-    console.log("New browser target created");
-    if (!target.url().match("chrome-extension://[a-z]+/home.html")) {
-      return;
-    }
-
-    if (target.url().includes("welcome")) {
-      console.log("Metmask extension already initialized");
-      return;
-    }
-
-    console.log("Reloading metamask extension page");
-    const page = await target.page();
-    await page.reload({ waitUntil: "domcontentloaded" });
-  });
-
-  console.log("Loading metamask");
-  const metamask = await timeout(
-    dappeteer.setupMetamask(browser, {
-      password: process.env.PASSWORD,
-      seed: process.env.SEED,
-    }),
-    30000
-  );
-  metamaskLoaded = true;
-  console.log("Metamask loaded");
-
-  console.log("Get first page");
-  const page = (await browser.pages())[0];
-
-  await page.bringToFront();
-
-  console.log("Start recording");
-  const recorder = new PuppeteerScreenRecorder(page);
-
-  await recorder.start("./recording.mp4");
+  let browser;
+  let recorder;
 
   try {
+    console.log("Loading browser");
+    browser = await dappeteer.launch(puppeteer, {
+      metamaskVersion: process.env.METAMASK_VERSION || "v10.1.1",
+      headless: false,
+      args: ["--enable-automation", "--no-sandbox"],
+      executablePath: process.env.PUPPETEER_EXEC_PATH,
+    });
+    console.log("Browser loaded");
+
+    isMetamaskLoaded = false;
+    browser.on("targetcreated", async (target) => {
+      if (isMetamaskLoaded) {
+        return;
+      }
+
+      console.log("New browser target created");
+      if (!target.url().match("chrome-extension://[a-z]+/home.html")) {
+        return;
+      }
+
+      if (target.url().includes("welcome")) {
+        console.log("Metmask extension already initialized");
+        return;
+      }
+
+      console.log("Reloading metamask extension page");
+      const page = await target.page();
+      await page.reload({ waitUntil: "domcontentloaded" });
+    });
+
+    console.log("Loading metamask");
+    const metamask = await timeout(
+      dappeteer.setupMetamask(browser, {
+        password: process.env.PASSWORD,
+        seed: process.env.SEED,
+      }),
+      30000
+    );
+    isMetamaskLoaded = true;
+    console.log("Metamask loaded");
+
+    console.log("Get first page");
+    const page = (await browser.pages())[0];
+
+    await page.bringToFront();
+
+    console.log("Start recording");
+    recorder = new PuppeteerScreenRecorder(page);
+
+    await recorder.start("./recording.mp4");
+
     console.log("Loading Spartacus stake page");
     await page.goto("https://app.spartacus.finance/#/stake", {
       waitUntil: ["domcontentloaded", "networkidle0"],
@@ -117,9 +105,12 @@ async function main() {
       } catch (err) {
         tryCounter += 1;
 
-        await page.reload({ waitUntil: ["domcontentloaded", "networkidle0"] });
+        await page.reload({
+          waitUntil: ["domcontentloaded", "networkidle0"],
+        });
       }
     }
+
     const rebaseTimerText = await page.evaluate(() => {
       const element = document.getElementsByClassName("rebase-timer").item(0);
 
@@ -130,10 +121,10 @@ async function main() {
 
     const totalSeconds = parseDuration(rebaseTimerText);
 
-    // if (totalSeconds > 60 * 15) {
-    //   console.log("SKIPPING");
-    //   return;
-    // }
+    if (totalSeconds > 60 * 15) {
+      console.log("SKIPPING");
+      return { status: "skipped" };
+    }
 
     console.log("Adding Fantom network");
     await metamask.addNetwork({
@@ -167,6 +158,11 @@ async function main() {
       timeout: 30000,
     });
 
+    if ((await page.$("button#claim-all-and-stake-btn[disabled]")) !== null) {
+      console.log("NOTHING TO CLAIM");
+      return { status: "skipped" };
+    }
+
     console.log("Claim and staking all bonds");
     await page.click("#claim-all-and-stake-btn");
 
@@ -174,13 +170,26 @@ async function main() {
     await metamask.confirmTransaction();
 
     console.log("PROCESSED CLAIM AND STAKE");
+    return { status: "succeeded" };
   } catch (err) {
     console.error(err);
+    return { status: "failed" };
   } finally {
-    console.log("Cleaning up");
-    await recorder.stop();
-    await browser.close();
+    if (recorder) {
+      console.log("Stopping recording");
+      await recorder.stop();
+    }
+
+    if (browser) {
+      console.log("Closing browser");
+      await browser.close();
+    }
   }
 }
 
-main();
+(async () => {
+  const status = await main();
+
+  console.log("Writing status: " + status.status);
+  await fs.writeFile("status.json", JSON.stringify(status));
+})();

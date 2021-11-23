@@ -168,6 +168,8 @@ async function main() {
     console.log("Claim and staking all bonds");
     await page.click("#claim-all-and-stake-btn");
 
+    await new Promise((res) => setTimeout(res, 5000));
+
     console.log("Confirming metamask transaction");
     await metamask.confirmTransaction();
 
